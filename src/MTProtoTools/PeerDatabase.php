@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -34,7 +34,7 @@ use danog\MadelineProto\LegacyMigrator;
 use danog\MadelineProto\Logger;
 use danog\MadelineProto\MTProto;
 use danog\MadelineProto\PeerNotInDbException;
-use danog\MadelineProto\RPCError\FloodWaitError;
+use danog\MadelineProto\RPCError\UsernameNotOccupiedError;
 use danog\MadelineProto\RPCErrorException;
 use danog\MadelineProto\TL\TLCallback;
 use danog\MadelineProto\Tools;
@@ -190,6 +190,7 @@ final class PeerDatabase implements TLCallback
         } else {
             $this->processUser($id);
         }
+        $this->recacheChatUsername($id, $this->db[$id] ?? null, []);
         unset($this->db[$id]);
     }
 
@@ -264,7 +265,7 @@ final class PeerDatabase implements TLCallback
         if (!$this->API->settings->getDb()->getEnableUsernameDb()) {
             return;
         }
-        $new = self::getUsernames($new);
+        $new = $new ? self::getUsernames($new) : [];
         $old = $old ? self::getUsernames($old) : [];
         $diffToRemove = array_diff($old, $new);
         $diffToAdd = array_diff($new, $old);
@@ -313,7 +314,13 @@ final class PeerDatabase implements TLCallback
             }
         }
         $result = $this->usernames[$username];
-        return $result === null ? $result : (int) $result;
+        $id = $result === null ? $result : (int) $result;
+        if ($id !== null && !$this->isset($id)) {
+            $this->API->logger("No peer entry for cached username @$username => {$id}, dropping entry!");
+            unset($this->usernames[$username]);
+            return null;
+        }
+        return $id;
     }
 
     private array $caching_simple_username = [];
@@ -336,13 +343,7 @@ final class PeerDatabase implements TLCallback
             $result = $this->API->getIdInternal(
                 ($this->API->methodCallAsyncRead('contacts.resolveUsername', ['username' => $username]))['peer'],
             );
-        } catch (FloodWaitError $e) {
-            throw $e;
-        } catch (RPCErrorException $e) {
-            $this->API->logger('Username resolution failed with error '.$e->getMessage(), Logger::ERROR);
-            if ($e->rpc === 'AUTH_KEY_UNREGISTERED' || $e->rpc === 'USERNAME_INVALID') {
-                throw $e;
-            }
+        } catch (UsernameNotOccupiedError) {
         } finally {
             unset($this->caching_simple_username[$username]);
         }
@@ -425,7 +426,7 @@ final class PeerDatabase implements TLCallback
                         $user['access_hash'] = $existingChat['access_hash'];
                     }
                 }
-                $this->recacheChatUsername($user['id'], $existingChat, $user);
+                $userUnchanged = $user;
                 if (!$this->API->settings->getDb()->getEnablePeerInfoDb()) {
                     $user = [
                         '_' => $user['_'],
@@ -435,8 +436,12 @@ final class PeerDatabase implements TLCallback
                     ];
                 }
                 $this->db[$user['id']] = $user;
+                $this->recacheChatUsername($user['id'], $existingChat, $userUnchanged);
                 if ($existingChat && ($existingChat['min'] ?? false) && !($user['min'] ?? false)) {
                     $this->API->minDatabase->clearPeer($user['id']);
+                }
+                if ($existingChat && ($existingChat['bot_info_version'] ?? null) !== ($user['bot_info_version'] ?? null)) {
+                    $this->expireFull($user['id']);
                 }
             }
         } finally {
@@ -548,7 +553,6 @@ final class PeerDatabase implements TLCallback
                 }
             }
             if ($existingChat != $chat) {
-                $this->recacheChatUsername($bot_api_id, $existingChat, $chat);
                 $this->API->logger("Updated chat {$bot_api_id}", Logger::ULTRA_VERBOSE);
                 if (($chat['min'] ?? false) && $existingChat && !($existingChat['min'] ?? false)) {
                     $this->API->logger("{$bot_api_id} is min, filling missing fields", Logger::ULTRA_VERBOSE);
@@ -560,6 +564,7 @@ final class PeerDatabase implements TLCallback
                     }
                     $chat = $newchat;
                 }
+                $chatUnchanged = $chat;
                 if (!$this->API->settings->getDb()->getEnablePeerInfoDb()) {
                     $chat = [
                         '_' => $chat['_'],
@@ -569,6 +574,7 @@ final class PeerDatabase implements TLCallback
                     ];
                 }
                 $this->db[$bot_api_id] = $chat;
+                $this->recacheChatUsername($bot_api_id, $existingChat, $chatUnchanged);
                 if ($existingChat && ($existingChat['min'] ?? false) && !($chat['min'] ?? false)) {
                     $this->API->minDatabase->clearPeer($bot_api_id);
                 }

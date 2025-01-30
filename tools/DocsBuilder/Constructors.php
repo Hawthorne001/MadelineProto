@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -66,7 +66,10 @@ trait Constructors
                 if ($param['type'] === 'strlong') {
                     $param['type'] = 'long';
                 }
-                if (\in_array($param['name'], ['flags', 'flags2', 'random_id', 'random_bytes'], true)) {
+                if (\in_array($param['name'], ['flags', 'flags2', 'random_bytes'], true)) {
+                    continue;
+                }
+                if ($param['name'] === 'random_id' && stripos($constructor, 'sponsored') === false) {
                     continue;
                 }
                 if ($param['name'] === 'peer' && $param['type'] === 'Peer') {
@@ -121,7 +124,10 @@ trait Constructors
                 if ($param['type'] === 'strlong') {
                     $param['type'] = 'long';
                 }
-                if (\in_array($param['name'], ['flags', 'flags2', 'random_id', 'random_bytes'], true)) {
+                if (\in_array($param['name'], ['flags', 'flags2', 'random_bytes'], true)) {
+                    continue;
+                }
+                if ($param['name'] === 'random_id' && stripos($constructor, 'sponsored') === false) {
                     continue;
                 }
                 if ($type === 'EncryptedMessage' && $param['name'] === 'bytes' && !isset($this->settings['td'])) {

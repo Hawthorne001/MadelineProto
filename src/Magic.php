@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -21,6 +21,9 @@ declare(strict_types=1);
 namespace danog\MadelineProto;
 
 use Amp\DeferredFuture;
+use Amp\File\Driver\BlockingFilesystemDriver;
+use Amp\File\Driver\EioFilesystemDriver;
+use Amp\File\Driver\UvFilesystemDriver;
 use Amp\SignalException;
 use danog\MadelineProto\TL\Conversion\Extension;
 use phpseclib3\Math\BigInteger;
@@ -36,6 +39,8 @@ use const PHP_SAPI;
 use const SIG_DFL;
 use const SIGINT;
 use const SIGTERM;
+
+use function Amp\File\filesystem;
 use function Amp\Log\hasColorSupport;
 use function function_exists;
 
@@ -227,6 +232,18 @@ final class Magic
             \define('AMP_WORKER', 1);
         }
         if (!self::$initedLight) {
+            // Setup file driver
+            $driver = EventLoop::getDriver();
+
+            if (UvFilesystemDriver::isSupported($driver)) {
+                $driver = new UvFilesystemDriver($driver);
+            } elseif (EioFilesystemDriver::isSupported()) {
+                $driver = new EioFilesystemDriver($driver);
+            } else {
+                $driver = new BlockingFilesystemDriver();
+            }
+            filesystem($driver);
+
             // Setup error reporting
             Shutdown::init();
             set_error_handler(Exception::exceptionErrorHandler(...));
@@ -282,6 +299,12 @@ final class Magic
                             self::togglePeriodicLogging();
                         }
                         throw new SignalException('SIGTERM received');
+                    }));
+                    EventLoop::unreference(EventLoop::onSignal(SIGQUIT, static function (): void {
+                        if (self::$suspendPeriodicLogging) {
+                            self::togglePeriodicLogging();
+                        }
+                        throw new SignalException('SIGQUIT received');
                     }));
                 } catch (Throwable $e) {
                 }

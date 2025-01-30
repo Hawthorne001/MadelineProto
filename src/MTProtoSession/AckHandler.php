@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -117,11 +117,9 @@ trait AckHandler
                 if (!$unencrypted && $pfsNotBound && $message->constructor !== 'auth.bindTempAuthKey') {
                     continue;
                 }
-                if ($message->constructor === 'msgs_state_req' || $message->constructor === 'ping_delay_disconnect') {
-                    unset($this->new_outgoing[$message_id], $this->outgoing_messages[$message_id]);
-                    continue;
-                }
-                if ($message->getSent() + $dropTimeout < hrtime(true)) {
+                if ($message->constructor === 'msgs_state_req' || $message->constructor === 'ping_delay_disconnect'
+                    || ($message->getSent() + $dropTimeout < hrtime(true))
+                ) {
                     Logger::log('No reply for message: ' . $message, Logger::WARNING);
                     $this->handleReject($message, static fn () => new TimeoutException('Request timeout'));
                     continue;

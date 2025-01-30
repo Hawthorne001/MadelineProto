@@ -9,7 +9,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -50,9 +50,9 @@ abstract class SettingsAbstract
                 continue;
             }
             $uc = ucfirst($name);
-            if (isset($other->{$name})
+            if ((isset($other->{$name}) || $name === 'metricsBindTo')
                 && (
-                    !isset($defaults[$name])
+                    !\array_key_exists($name, $defaults)
                     || (
                         $other->{$name} !== $defaults[$name]  // Isn't equal to the default value
                         || $other->{$name} !== $this->{$name} // Is equal, but current value is not the default one

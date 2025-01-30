@@ -9,7 +9,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Amir Hossein Jafari <amirhosseinjafari8228@gmail.com>
- * @copyright 2016-2023 Amir Hossein Jafari <amirhosseinjafari8228@gmail.com>
+ * @copyright 2016-2025 Amir Hossein Jafari <amirhosseinjafari8228@gmail.com>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -58,7 +58,7 @@ abstract class AbstractPoll implements JsonSerializable
     public readonly array $recentVoters;
 
     /** Total number of people that voted in the poll */
-    public readonly int $totalVoters;
+    public readonly ?int $totalVoters;
 
     /** @internal */
     public function __construct(array $rawPoll)
@@ -70,7 +70,7 @@ abstract class AbstractPoll implements JsonSerializable
         $this->closeDate    = $rawPoll['poll']['close_date'] ?? null;
         $this->closePeriod  = $rawPoll['poll']['close_period'] ?? null;
         $this->recentVoters = $rawPoll['results']['recent_voters'] ?? [];
-        $this->totalVoters  = $rawPoll['results']['total_voters'];
+        $this->totalVoters  = $rawPoll['results']['total_voters'] ?? null;
         $this->answers = self::getPollAnswers($rawPoll['poll']['answers'], $rawPoll['results']['results'] ?? []);
     }
 

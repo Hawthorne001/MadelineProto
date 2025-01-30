@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -27,7 +27,8 @@ use danog\MadelineProto\EventHandler\Message\SecretMessage;
 use danog\MadelineProto\Logger;
 use danog\MadelineProto\Loop\Update\UpdateLoop;
 use danog\MadelineProto\MTProtoTools\Crypt;
-use danog\MadelineProto\RPCErrorException;
+use danog\MadelineProto\RPCError\EncryptionAlreadyAcceptedError;
+use danog\MadelineProto\RPCError\EncryptionAlreadyDeclinedError;
 use danog\MadelineProto\SecretPeerNotInDbException;
 use danog\MadelineProto\SecurityException;
 use danog\MadelineProto\Tools;
@@ -233,8 +234,9 @@ trait AuthKeyHandler
      * Discard secret chat.
      *
      * @param int $chat Secret chat ID
+     * @param bool $deleteHistory If true, deletes the entire chat history for the other user as well.
      */
-    public function discardSecretChat(int $chat): void
+    public function discardSecretChat(int $chat, bool $deleteHistory = false): void
     {
         $this->logger->logger('Discarding secret chat '.$chat.'...', Logger::VERBOSE);
         if (isset($this->secretChats[$chat])) {
@@ -244,11 +246,8 @@ trait AuthKeyHandler
             unset($this->temp_requested_secret_chats[$chat]);
         }
         try {
-            $this->methodCallAsyncRead('messages.discardEncryption', ['chat_id' => $chat]);
-        } catch (RPCErrorException $e) {
-            if ($e->rpc !== 'ENCRYPTION_ALREADY_DECLINED') {
-                throw $e;
-            }
+            $this->methodCallAsyncRead('messages.discardEncryption', ['chat_id' => $chat, 'delete_history' => $deleteHistory]);
+        } catch (EncryptionAlreadyAcceptedError|EncryptionAlreadyDeclinedError) {
         }
     }
 }

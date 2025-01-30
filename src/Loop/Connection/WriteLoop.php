@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -372,21 +372,6 @@ final class WriteLoop extends Loop
                     $this->connection->new_outgoing[$message_id] = $message;
                 }
                 $message->sent();
-                $message->cancellation?->subscribe(function () use ($message): void {
-                    $this->connection->requestResponse?->inc([
-                        'method' => $message->constructor,
-                        'error_message' => 'Request Timeout',
-                        'error_code' => '408',
-                    ]);
-
-                    if ($message->hasMsgId()) {
-                        $this->API->logger("Cancelling $message...");
-                        $this->API->logger($this->connection->methodCallAsyncRead(
-                            'rpc_drop_answer',
-                            ['req_msg_id' => $message->getMsgId()]
-                        ));
-                    }
-                });
             }
             $this->connection->pendingOutgoingGauge?->set(\count($this->connection->pendingOutgoing));
         } while ($this->connection->pendingOutgoing && !$skipped);

@@ -9,7 +9,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -22,10 +22,13 @@ use Amp\ByteStream\BufferedReader;
 use Amp\ByteStream\ReadableBuffer;
 use Amp\ByteStream\ReadableStream;
 use Amp\ByteStream\WritableStream;
+use Amp\Cancellation;
 use Amp\Sync\LocalMutex;
 use danog\Loop\Loop;
 use danog\MadelineProto\Loop\VoIP\DjLoop;
 use danog\MadelineProto\MTProtoTools\Crypt;
+use danog\MadelineProto\RPCError\CallAlreadyAcceptedError;
+use danog\MadelineProto\RPCError\CallAlreadyDeclinedError;
 use danog\MadelineProto\VoIP\CallState;
 use danog\MadelineProto\VoIP\DiscardReason;
 use danog\MadelineProto\VoIP\Endpoint;
@@ -243,17 +246,13 @@ final class VoIPController
                     'g_a' => $this->call['g_a'],
                     'protocol' => self::CALL_PROTOCOL,
                 ]))['phone_call'];
-            } catch (RPCErrorException $e) {
-                if ($e->rpc === 'CALL_ALREADY_ACCEPTED') {
-                    $this->log(sprintf(Lang::$current_lang['call_already_accepted'], $params['id']));
-                    return true;
-                }
-                if ($e->rpc === 'CALL_ALREADY_DECLINED') {
-                    $this->log(Lang::$current_lang['call_already_declined']);
-                    $this->discard(DiscardReason::HANGUP);
-                    return false;
-                }
-                throw $e;
+            } catch (CallAlreadyAcceptedError) {
+                $this->log(sprintf(Lang::$current_lang['call_already_accepted'], $params['id']));
+                return true;
+            } catch (CallAlreadyDeclinedError) {
+                $this->log(Lang::$current_lang['call_already_declined']);
+                $this->discard(DiscardReason::HANGUP);
+                return false;
             }
             $visualization = [];
             $length = new BigInteger(\count(Magic::$emojis));
@@ -278,7 +277,7 @@ final class VoIPController
     /**
      * Accept incoming call.
      */
-    public function accept(): self
+    public function accept(?Cancellation $cancellation = null): self
     {
         $lock = $this->authMutex->acquire();
         try {
@@ -288,7 +287,7 @@ final class VoIPController
             Assert::eq($this->callState->name, CallState::INCOMING->name);
 
             $this->log(sprintf(Lang::$current_lang['accepting_call'], $this->public->otherID), Logger::VERBOSE);
-            $dh_config = $this->API->getDhConfig();
+            $dh_config = $this->API->getDhConfig($cancellation);
             $this->log('Generating b...', Logger::VERBOSE);
             $b = BigInteger::randomRange(Magic::$two, $dh_config['p']->subtract(Magic::$two));
             $g_b = $dh_config['g']->powMod($b, $dh_config['p']);
@@ -304,18 +303,15 @@ final class VoIPController
                     ],
                     'g_b' => $g_b->toBytes(),
                     'protocol' => self::CALL_PROTOCOL,
+                    'cancellation' => $cancellation,
                 ]);
-            } catch (RPCErrorException $e) {
-                if ($e->rpc === 'CALL_ALREADY_ACCEPTED') {
-                    $this->log(sprintf(Lang::$current_lang['call_already_accepted'], $this->public->callID));
-                    return $this;
-                }
-                if ($e->rpc === 'CALL_ALREADY_DECLINED') {
-                    $this->log(Lang::$current_lang['call_already_declined']);
-                    $this->discard(DiscardReason::HANGUP);
-                    return $this;
-                }
-                throw $e;
+            } catch (CallAlreadyAcceptedError) {
+                $this->log(sprintf(Lang::$current_lang['call_already_accepted'], $this->public->callID));
+                return $this;
+            } catch (CallAlreadyDeclinedError) {
+                $this->log(Lang::$current_lang['call_already_declined']);
+                $this->discard(DiscardReason::HANGUP);
+                return $this;
             }
             $this->call['b'] = $b;
 
@@ -417,10 +413,7 @@ final class VoIPController
                 DiscardReason::DISCONNECTED => 'phoneCallDiscardReasonDisconnect',
                 DiscardReason::MISSED => 'phoneCallDiscardReasonMissed'
             }]]);
-        } catch (RPCErrorException $e) {
-            if (!\in_array($e->rpc, ['CALL_ALREADY_DECLINED', 'CALL_ALREADY_ACCEPTED'], true)) {
-                throw $e;
-            }
+        } catch (CallAlreadyAcceptedError|CallAlreadyDeclinedError) {
         }
         if ($rating !== null) {
             $this->log(sprintf('Setting rating for call %s...', $this->call), Logger::VERBOSE);

@@ -9,7 +9,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -297,6 +297,9 @@ trait FilesLogic
         }
         if ($upload && isset($media['file']) && !\is_array($media['file'])) {
             $media['file'] = $this->upload($media['file'], cancellation: $cancellation);
+        }
+        if ($upload && isset($media['thumb']) && !\is_array($media['thumb'])) {
+            $media['thumb'] = $this->upload($media['thumb'], cancellation: $cancellation);
         }
     }
     /**

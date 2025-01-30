@@ -9,7 +9,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -88,6 +88,12 @@ abstract class Message extends AbstractMessage
     /** Last edit date of the message */
     public readonly ?int $editDate;
 
+    /**
+     * Indicates if the post has a hidden edit, which is an edit that does not modify the actual message content.
+     * Used to signify non-content related updates such as reactions.
+     */
+    public readonly bool $editHide;
+
     /** Inline or reply keyboard. */
     public readonly InlineKeyboard|ReplyKeyboard|null $keyboard;
 
@@ -147,6 +153,7 @@ abstract class Message extends AbstractMessage
         $this->signature = $rawMessage['post_author'] ?? null;
         $this->groupedId = $rawMessage['grouped_id'] ?? null;
         $this->editDate = $rawMessage['edit_date'] ?? null;
+        $this->editHide = $rawMessage['edit_hide'] ?? false;
         $this->message = $rawMessage['message'];
         $this->fromScheduled = $rawMessage['from_scheduled'] ?? false;
 
@@ -192,7 +199,8 @@ abstract class Message extends AbstractMessage
         if ($this->commandType = CommandType::tryFrom($this->message[0] ?? '')) {
             $space = strpos($this->message, ' ', 1) ?: \strlen($this->message);
             $args = explode(' ', substr($this->message, $space+1));
-            $this->command = substr($this->message, 1, $space-1);
+            $length = ($len = strpos($cmd = substr($this->message, 1, $space-1), "@")) ? $len : $space-1;
+            $this->command = substr($cmd, 0, $length);
             $this->commandArgs = $args === [''] ? [] : $args;
         } else {
             $this->command = null;

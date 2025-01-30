@@ -9,12 +9,14 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
 
 namespace danog\MadelineProto\Ipc\Wrapper;
+
+use Amp\File\Whence;
 
 /**
  * @internal
@@ -23,14 +25,8 @@ trait SeekableTrait
 {
     /**
     * Set the handle's internal pointer position.
-    *
-    * $whence values:
-    *
-    * SEEK_SET - Set position equal to offset bytes.
-    * SEEK_CUR - Set position to current location plus offset.
-    * SEEK_END - Set position to end-of-file plus offset.
     */
-    public function seek(int $position, int $whence = \SEEK_SET): int
+    public function seek(int $position, Whence $whence = Whence::Current): int
     {
         return $this->__call('seek', [$position, $whence]);
     }

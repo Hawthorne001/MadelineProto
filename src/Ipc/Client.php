@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -81,6 +81,31 @@ final class Client extends ClientAbstract
         self::$instances[$session->getSessionDirectoryPath()] = $this;
         EventLoop::queue($this->loopInternal(...));
     }
+
+    /**
+     * Call function.
+     *
+     * @param string|int    $function  Function name
+     * @param array|Wrapper $arguments Arguments
+     */
+    public function __call(string|int $function, array|Wrapper $arguments)
+    {
+        if (\is_array($arguments) && $arguments) {
+            foreach ($arguments as &$arg) {
+                if ($arg instanceof Cancellation) {
+                    break;
+                }
+            }
+            if ($arg instanceof Cancellation) {
+                $wrapper = Wrapper::create($arguments, $this->session, $this->logger);
+                $wrapper->wrap($arg);
+                unset($arg, $arguments);
+                $arguments = $wrapper;
+            }
+        }
+        return parent::__call($function, $arguments);
+    }
+
     /** @internal */
     public function getSession(): SessionPaths
     {
@@ -338,6 +363,9 @@ final class Client extends ClientAbstract
     public function getEventHandler(?string $class = null): ?EventHandlerProxy
     {
         if ($class !== null) {
+            if ($class === $this->getEventHandlerClass()) {
+                return new EventHandlerProxy(null, $this);
+            }
             return $this->getPlugin($class);
         }
         return $this->hasEventHandler() ? new EventHandlerProxy(null, $this) : null;

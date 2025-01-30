@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -28,9 +28,9 @@ use danog\MadelineProto\Logger;
 use danog\MadelineProto\MTProto\MTProtoIncomingMessage;
 use danog\MadelineProto\MTProtoTools\Crypt;
 use danog\MadelineProto\NothingInTheSocketException;
-use danog\MadelineProto\RPCErrorException;
 use danog\MadelineProto\SecurityException;
 use danog\MadelineProto\Tools;
+use danog\MadelineProto\TransportError;
 use Error;
 use Revolt\EventLoop;
 
@@ -109,7 +109,7 @@ final class ReadLoop extends Loop
                     $this->connection->reconnect();
                 } else {
                     $this->connection->reconnect();
-                    throw new RPCErrorException((string) $error, $error);
+                    throw new TransportError($error);
                 }
             });
             $this->API->logger("Stopping $this due to $error...", Logger::ERROR);

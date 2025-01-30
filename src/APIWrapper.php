@@ -13,13 +13,15 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
 
 namespace danog\MadelineProto;
 
+use Amp\Cancellation;
+use Amp\TimeoutCancellation;
 use danog\MadelineProto\Ipc\Client;
 
 final class APIWrapper
@@ -72,6 +74,15 @@ final class APIWrapper
     public function getAPI(): Client|MTProto|null
     {
         return $this->API;
+    }
+
+    private ?int $drop = null;
+    /**
+     * @internal
+     */
+    public function getRpcDropCancellation(): Cancellation
+    {
+        return new TimeoutCancellation($this->drop ??= $this->getAPI()->getSettings()->getRpc()->getRpcDropTimeout());
     }
 
     /**

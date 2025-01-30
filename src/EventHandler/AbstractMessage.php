@@ -11,7 +11,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -93,12 +93,13 @@ abstract class AbstractMessage extends Update implements SimpleFilters
         } else {
             $secretChat = null;
         }
+        $fromReplies = (($info['User']['username'] ?? '') === 'replies');
         $this->out = $rawMessage['out'] ?? false;
-        $this->id = $rawMessage['id'] ?? $rawMessage['random_id'];
-        $this->chatId = isset($secretChat) ? $secretChat->chatId : $info['bot_api_id'];
-        $this->senderId = isset($secretChat)  ? $secretChat->otherID : (isset($rawMessage['from_id'])
+        $this->id = $fromReplies ? $rawMessage['fwd_from']['saved_from_msg_id'] : $rawMessage['id'] ?? $rawMessage['random_id'];
+        $this->chatId = isset($secretChat) ? $secretChat->chatId : ($fromReplies ? $rawMessage['reply_to']['reply_to_peer_id'] : $info['bot_api_id']);
+        $this->senderId = isset($secretChat)  ? $secretChat->otherID : ($fromReplies ? $this->getClient()->getIdInternal($rawMessage['fwd_from']['from_id']) : (isset($rawMessage['from_id'])
             ? $this->getClient()->getIdInternal($rawMessage['from_id'])
-            : $this->chatId);
+            : $this->chatId));
         $this->date = $rawMessage['date'];
         $this->mentioned = $rawMessage['mentioned'] ?? false;
         $this->silent = $rawMessage['silent'] ?? false;
@@ -866,7 +867,7 @@ abstract class AbstractMessage extends Update implements SimpleFilters
         return $this->getClient()->methodCallAsyncRead(
             'messages.setTyping',
             [
-                'peer' => $this->senderId,
+                'peer' => $this->chatId,
                 'top_msg_id' => $this->topicId,
                 'action' => $action,
             ],
@@ -884,7 +885,6 @@ abstract class AbstractMessage extends Update implements SimpleFilters
             return $this->getClient()->methodCallAsyncRead(
                 'channels.readHistory',
                 [
-                    'peer' => $this->chatId,
                     'channel' => $this->chatId,
                     'max_id' => $readAll ? 0 : $this->id,
                 ],
@@ -894,7 +894,6 @@ abstract class AbstractMessage extends Update implements SimpleFilters
             'messages.readHistory',
             [
                 'peer' => $this->chatId,
-                'channel' => $this->chatId,
                 'max_id' => $readAll ? 0 : $this->id,
             ],
         );

@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -276,11 +276,11 @@ final class Logger
         $this->colors[self::WARNING] = implode(';', [self::FOREGROUND['white'], self::SET['dim'], self::BACKGROUND['red']]);
         $this->colors[self::ERROR] = implode(';', [self::FOREGROUND['white'], self::SET['bold'], self::BACKGROUND['red']]);
         $this->colors[self::FATAL_ERROR] = implode(';', [self::FOREGROUND['red'], self::SET['bold'], self::BACKGROUND['light_gray']]);
-        $this->newline = PHP_EOL;
+        $newline = PHP_EOL;
         if ($this->mode === self::ECHO_LOGGER) {
             $stdout = getStdout();
             if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
-                $this->newline = '<br>'.$this->newline;
+                $newline = '<br>'.$newline;
             }
         } elseif ($this->mode === self::FILE_LOGGER) {
             $stdout = new WritableResourceStream(fopen($this->optional, 'a'));
@@ -309,6 +309,7 @@ final class Logger
                 $stdout = getStderr();
             }
         }
+        $this->newline = $newline;
 
         if (isset($stdout)) {
             $pipe = new Pipe(PHP_INT_MAX);

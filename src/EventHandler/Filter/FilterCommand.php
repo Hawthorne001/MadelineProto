@@ -9,7 +9,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -39,7 +39,7 @@ final class FilterCommand extends Filter
      */
     public function __construct(private readonly string $command, array $types = [CommandType::BANG, CommandType::DOT, CommandType::SLASH])
     {
-        Assert::true(preg_match("/^\w+$/", $command) === 1, "An invalid command was specified!");
+        Assert::true(preg_match("/^[\w@]+$/", $command) === 1, "An invalid command was specified!");
         Assert::notEmpty($types, 'No command types were specified!');
         $c = [];
         foreach ($types as $type) {

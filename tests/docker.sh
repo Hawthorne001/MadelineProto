@@ -1,8 +1,19 @@
-#!/bin/bash -e
+#!/bin/bash -ex
+
+wget https://github.com/docker-library/php/raw/refs/heads/master/8.4/alpine3.21/fpm/Dockerfile
+
+sed 's/-O2/-O3 -g/g;s/strip --strip-all/echo/g' -i Dockerfile
 
 docker login --username "$DOCKER_USERNAME" --password "$DOCKER_PASSWORD"
 
-docker buildx create --use --name wp --driver remote tcp://192.168.69.1:1234
+has_arm=0
+for f in 192.168.1.2 192.168.69.4; do
+	if ping -c 1 $f; then
+		docker buildx create --use --name wp --driver remote tcp://$f:1234
+		has_arm=1
+		break
+	fi
+done
 
 has_riscv=0
 if ping -c 1 192.168.69.206; then
@@ -11,7 +22,7 @@ if ping -c 1 192.168.69.206; then
 fi
 
 has_x86=0
-for f in 192.168.1.30 192.168.69.236 192.168.69.233 192.168.69.207 192.168.69.130; do
+for f in 192.168.1.10 192.168.69.236 192.168.69.233 192.168.69.207 192.168.69.130; do
 	if ping -c 1 $f; then
 		docker buildx create --append --name wp --driver remote tcp://$f:1234
 		has_x86=1
@@ -19,41 +30,33 @@ for f in 192.168.1.30 192.168.69.236 192.168.69.233 192.168.69.207 192.168.69.13
 	fi
 done
 
-arches=""
-arches="arm64"
-if [ $has_x86 -eq 1 ]; then
-	arches="$arches amd64"
-fi
-
-if [ $has_riscv -eq 1 ]; then
-	arches="$arches riscv64"
-fi
+arches="amd64 arm64 riscv64"
+arches="amd64 arm64"
 
 echo "Building for $arches"
 
 join_images() {
-	if [ "$1" == "debian" ]; then
-		docker buildx imagetools create -t danog/madelineproto:$2 danog/madelineproto:next-$1-{arm,amd}64
-	else
-		docker buildx imagetools create -t danog/madelineproto:$2 danog/madelineproto:next-$1-{arm,amd,riscv}64
-	fi
+	docker buildx imagetools create -t danog/madelineproto:$2 danog/madelineproto:next-$1-{arm,amd,riscv}64
 }
 
 for f in alpine; do
+	pids=""
 	for arch in $arches; do
 		cp tests/dockerfiles/Dockerfile.$f Dockerfile.$arch
-		if [ "$arch" == "riscv64" ]; then
-			if [ "$f" == "debian" ]; then continue; fi
-			sed "s|FROM .*|FROM danog/php:8.2-fpm-$f|" -i Dockerfile.$arch
-		fi
+		cp tests/dockerfiles/docker-php* .
+
+		sed "s|FROM .*||" -i Dockerfile.$arch
+		cat Dockerfile Dockerfile.$arch > Dockerfile.final.$arch
+
 		docker buildx build --platform linux/$arch . \
-			-f Dockerfile.$arch \
+			-f Dockerfile.final.$arch \
 			-t danog/madelineproto:next-$f-$arch \
 			--cache-from danog/madelineproto:next-$f-$arch \
 			--cache-to type=inline \
 			--push &
+		pids="$pids $!"
 	done
-	wait
+	for pid in $pids; do wait $pid; done
 
 	join_images $f next-$f
 

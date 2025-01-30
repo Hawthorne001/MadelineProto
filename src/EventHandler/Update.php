@@ -9,7 +9,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -23,6 +23,10 @@ use ReflectionProperty;
 
 /**
  * Represents a generic update.
+ *
+ * NOTE: use serialize(), not json_encode() to serialize updates.
+ *
+ * json_encode() may only be used for logging updates.
  */
 abstract class Update extends IpcCapable implements JsonSerializable
 {

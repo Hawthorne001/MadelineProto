@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -28,6 +28,7 @@ use danog\MadelineProto\MTProto\MTProtoOutgoingMessage;
 use danog\MadelineProto\MTProto\PermAuthKey;
 use danog\MadelineProto\MTProto\TempAuthKey;
 use danog\MadelineProto\MTProtoTools\Crypt;
+use danog\MadelineProto\RPCError\DcIdInvalidError;
 use danog\MadelineProto\Settings\Connection as ConnectionSettings;
 use danog\MadelineProto\Stream\ContextIterator;
 use JsonSerializable;
@@ -275,13 +276,11 @@ final class DataCenterConnection implements JsonSerializable
                         $socket->methodCallAsyncRead('auth.importAuthorization', $exported_authorization);
                         $this->authorized(true);
                         break;
-                    } catch (Exception $e) {
+                    } catch (DcIdInvalidError $e) {
                         $logger->logger('Failure while syncing authorization from DC '.$authorized_dc_id.' to DC '.$this->datacenter.': '.$e->getMessage(), Logger::ERROR);
-                    } catch (RPCErrorException $e) {
+                        break;
+                    } catch (RPCErrorException|Exception $e) {
                         $logger->logger('Failure while syncing authorization from DC '.$authorized_dc_id.' to DC '.$this->datacenter.': '.$e->getMessage(), Logger::ERROR);
-                        if ($e->rpc === 'DC_ID_INVALID') {
-                            break;
-                        }
                     }
                     // Turns out this DC isn't authorized after all
                 }

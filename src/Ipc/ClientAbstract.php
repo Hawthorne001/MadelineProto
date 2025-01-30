@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -93,11 +93,8 @@ abstract class ClientAbstract
                 if (!isset($this->requests[$id])) {
                     Logger::log("Got response for non-existing ID $id!");
                 } else {
-                    [, $args, $promise] = $this->requests[$id];
+                    $promise = $this->requests[$id][2];
                     unset($this->requests[$id]);
-                    if ($args instanceof Wrapper) {
-                        $args->disconnect();
-                    }
                     if ($payload instanceof ExitFailure) {
                         $promise->error($payload->getException());
                     } else {

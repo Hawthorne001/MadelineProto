@@ -9,7 +9,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -76,6 +76,7 @@ final class GarbageCollector
         self::$inuse = self::$prometheus->registerGauge("MadelineProto", "php_memstats_inuse_bytes", "RAM actually used by PHP");
 
         $counter = self::$prometheus->registerCounter("MadelineProto", "explicit_gc_count", "Number of times the GC was explicitly invoked");
+        $counter->incBy(0);
         EventLoop::unreference(EventLoop::repeat(1, static function () use ($counter): void {
             $currentMemory = self::getMemoryConsumption();
             if ($currentMemory > self::$memoryConsumption + self::$memoryDiffMb) {
@@ -90,7 +91,7 @@ final class GarbageCollector
             }
         }));
 
-        if (!\defined('MADELINE_RELEASE_URL')) {
+        if (!\defined('MADELINE_RELEASE_URL') || \defined('MADELINEPROTO_TEST')) {
             return;
         }
         $client = HttpClientBuilder::buildDefault();

@@ -9,7 +9,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Mahdi <mahdi.talaee1379@gmail.com>
- * @copyright 2016-2023 Mahdi <mahdi.talaee1379@gmail.com>
+ * @copyright 2016-2025 Mahdi <mahdi.talaee1379@gmail.com>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -53,6 +53,28 @@ class SecretMessage extends AbstractPrivateMessage
         $this->replyCache = $message;
         $this->replyCached = true;
         return $this->replyCache;
+    }
+
+    /**
+     * Delete the message.
+     *
+     * @param boolean $revoke Whether to delete the message for all participants of the chat.
+     */
+    public function delete(bool $revoke = true): void
+    {
+        if (!$revoke) {
+            return;
+        }
+        $this->getClient()->methodCallAsyncRead(
+            'messages.sendEncryptedService',
+            [
+                'peer' => $this->chatId,
+                'message' => [
+                    '_' => 'decryptedMessageService',
+                    'action' => ['_' => 'decryptedMessageActionDeleteMessages', 'random_ids' => [$this->id]],
+                ],
+            ]
+        );
     }
 
     public function screenShot(): DialogScreenshotTaken

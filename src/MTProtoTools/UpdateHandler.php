@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -49,6 +49,9 @@ use danog\MadelineProto\EventHandler\Delete\DeleteScheduledMessages;
 use danog\MadelineProto\EventHandler\InlineQuery;
 use danog\MadelineProto\EventHandler\Message;
 use danog\MadelineProto\EventHandler\Message\ChannelMessage;
+use danog\MadelineProto\EventHandler\Message\CommentReply;
+use danog\MadelineProto\EventHandler\Message\Entities\MessageEntity;
+use danog\MadelineProto\EventHandler\Message\Entities\TextWithEntities;
 use danog\MadelineProto\EventHandler\Message\GroupMessage;
 use danog\MadelineProto\EventHandler\Message\PrivateMessage;
 use danog\MadelineProto\EventHandler\Message\SecretMessage;
@@ -63,6 +66,7 @@ use danog\MadelineProto\EventHandler\Message\Service\DialogDeleteMessages;
 use danog\MadelineProto\EventHandler\Message\Service\DialogGameScore;
 use danog\MadelineProto\EventHandler\Message\Service\DialogGeoProximityReached;
 use danog\MadelineProto\EventHandler\Message\Service\DialogGiftPremium;
+use danog\MadelineProto\EventHandler\Message\Service\DialogGiftStars;
 use danog\MadelineProto\EventHandler\Message\Service\DialogGroupCall\GroupCall;
 use danog\MadelineProto\EventHandler\Message\Service\DialogGroupCall\GroupCallInvited;
 use danog\MadelineProto\EventHandler\Message\Service\DialogGroupCall\GroupCallScheduled;
@@ -71,6 +75,8 @@ use danog\MadelineProto\EventHandler\Message\Service\DialogMemberJoinedByRequest
 use danog\MadelineProto\EventHandler\Message\Service\DialogMemberLeft;
 use danog\MadelineProto\EventHandler\Message\Service\DialogMembersJoined;
 use danog\MadelineProto\EventHandler\Message\Service\DialogMessagePinned;
+use danog\MadelineProto\EventHandler\Message\Service\DialogPaymentSent;
+use danog\MadelineProto\EventHandler\Message\Service\DialogPaymentSentMe;
 use danog\MadelineProto\EventHandler\Message\Service\DialogPeerRequested;
 use danog\MadelineProto\EventHandler\Message\Service\DialogPhoneCall;
 use danog\MadelineProto\EventHandler\Message\Service\DialogPhotoChanged;
@@ -79,11 +85,16 @@ use danog\MadelineProto\EventHandler\Message\Service\DialogScreenshotTaken;
 use danog\MadelineProto\EventHandler\Message\Service\DialogSetChatTheme;
 use danog\MadelineProto\EventHandler\Message\Service\DialogSetChatWallPaper;
 use danog\MadelineProto\EventHandler\Message\Service\DialogSetTTL;
+use danog\MadelineProto\EventHandler\Message\Service\DialogStarGift;
 use danog\MadelineProto\EventHandler\Message\Service\DialogSuggestProfilePhoto;
 use danog\MadelineProto\EventHandler\Message\Service\DialogTitleChanged;
 use danog\MadelineProto\EventHandler\Message\Service\DialogTopicCreated;
 use danog\MadelineProto\EventHandler\Message\Service\DialogTopicEdited;
 use danog\MadelineProto\EventHandler\Message\Service\DialogWebView;
+use danog\MadelineProto\EventHandler\Payments\Payment;
+use danog\MadelineProto\EventHandler\Payments\PaymentCharge;
+use danog\MadelineProto\EventHandler\Payments\PaymentRequestedInfo;
+use danog\MadelineProto\EventHandler\Payments\StarGift;
 use danog\MadelineProto\EventHandler\Pinned;
 use danog\MadelineProto\EventHandler\Pinned\PinnedChannelMessages;
 use danog\MadelineProto\EventHandler\Pinned\PinnedGroupMessages;
@@ -116,7 +127,10 @@ use danog\MadelineProto\Loop\Update\UpdateLoop;
 use danog\MadelineProto\ParseMode;
 use danog\MadelineProto\PeerNotInDbException;
 use danog\MadelineProto\ResponseException;
+use danog\MadelineProto\RPCError\ChannelPrivateError;
 use danog\MadelineProto\RPCError\FloodWaitError;
+use danog\MadelineProto\RPCError\MsgIdInvalidError;
+use danog\MadelineProto\RPCError\SessionPasswordNeededError;
 use danog\MadelineProto\RPCErrorException;
 use danog\MadelineProto\Settings;
 use danog\MadelineProto\TL\TL;
@@ -486,6 +500,7 @@ trait UpdateHandler
                 'updatePendingJoinRequests'     => new PendingJoinRequests($this, $update),
                 'updateBotChatInviteRequester'  => new BotChatInviteRequest($this, $update),
                 'updateBotCommands'             => new BotCommands($this, $update),
+                'updateBotPrecheckoutQuery'     => new Payment($this, $update),
                 default => null
             };
         } catch (\Throwable $e) {
@@ -680,6 +695,69 @@ trait UpdateHandler
                     $message['action']['text'],
                     null
                 ),
+                'messageActionGiftStars' => new DialogGiftStars(
+                    $this,
+                    $message,
+                    $info,
+                    $message['action']['currency'],
+                    $message['action']['amount'],
+                    $message['action']['stars'],
+                    $message['action']['crypto_currency'] ?? null,
+                    $message['action']['crypto_amount'] ?? null,
+                    $message['action']['transaction_id'],
+                ),
+                'messageActionStarGift' => new DialogStarGift(
+                    $this,
+                    $message,
+                    $info,
+                    $message['action']['name_hidden'] ?? null,
+                    $message['action']['saved'] ?? null,
+                    $message['action']['converted'] ?? null,
+                    new StarGift(
+                        $this,
+                        $message['action']['gift']
+                    ),
+                    isset($message['action']['message']) ? new TextWithEntities(
+                        $message['action']['message']['text'],
+                        MessageEntity::fromRawEntities($message['action']['message']['entities']),
+                        isset($message['action']['message']['parse_mode']) ?
+                            ParseMode::from($message['action']['message']['parse_mode'])
+                            : null
+                    ) : null,
+                    $message['action']['convert_stars'],
+                ),
+                'messageActionPaymentSent' => new DialogPaymentSent(
+                    $this,
+                    $message,
+                    $info,
+                    $message['action']['recurring_init'] ?? null,
+                    $message['action']['recurring_used'] ?? null,
+                    $message['action']['currency'],
+                    $message['action']['total_amount'],
+                    $message['action']['invoice_slug'] ?? null,
+                    $message['action']['subscription_until_date'] ?? null
+                ),
+                'messageActionPaymentSentMe' => new DialogPaymentSentMe(
+                    $this,
+                    $message,
+                    $info,
+                    $message['action']['recurring_init'] ?? null,
+                    $message['action']['recurring_used'] ?? null,
+                    $message['action']['currency'],
+                    $message['action']['total_amount'],
+                    $message['action']['payload'],
+                    isset($message['action']['info']) ? new PaymentRequestedInfo(
+                        $message['action']['info']['name'],
+                        $message['action']['info']['phone'],
+                        $message['action']['info']['email']
+                    ) : null,
+                    $message['action']['shipping_option_id'] ?? null,
+                    new PaymentCharge(
+                        $message['action']['charge']['id'],
+                        $message['action']['charge']['provider_charge_id']
+                    ),
+                    $message['action']['subscription_until_date'] ?? null
+                ),
                 'messageActionGiftPremium' => new DialogGiftPremium(
                     $this,
                     $message,
@@ -778,7 +856,7 @@ trait UpdateHandler
             };
         }
         if (($info['User']['username'] ?? '') === 'replies') {
-            return null;
+            return new CommentReply($this, $message, $info, $scheduled);
         }
         if ($message['_'] === 'encryptedMessage') {
             return new SecretMessage($this, $message, $info, $scheduled);
@@ -1077,24 +1155,21 @@ trait UpdateHandler
                     );
                 }
                 $this->processAuthorization($authorization['authorization']);
-            } catch (RPCErrorException $e) {
-                if ($e->rpc === 'SESSION_PASSWORD_NEEDED') {
-                    $this->logger->logger(Lang::$current_lang['login_2fa_enabled'], Logger::NOTICE);
-                    $this->authorization = $this->methodCallAsyncRead('account.getPassword', [], $datacenter ?? null);
-                    if (!isset($this->authorization['hint'])) {
-                        $this->authorization['hint'] = '';
-                    }
-                    $this->authorized = API::WAITING_PASSWORD;
-                    $this->qrLoginDeferred?->cancel();
-                    $this->qrLoginDeferred = null;
-                    return;
+            } catch (SessionPasswordNeededError) {
+                $this->logger->logger(Lang::$current_lang['login_2fa_enabled'], Logger::NOTICE);
+                $this->authorization = $this->methodCallAsyncRead('account.getPassword', [], $datacenter ?? null);
+                if (!isset($this->authorization['hint'])) {
+                    $this->authorization['hint'] = '';
                 }
-                throw $e;
+                $this->authorized = API::WAITING_PASSWORD;
+                $this->qrLoginDeferred?->cancel();
+                $this->qrLoginDeferred = null;
+                return;
             }
             return;
         }
         if (
-            \in_array($update['_'], ['updateChannel', 'updateUser', 'updateUserName', 'updateUserPhone', 'updateUserBlocked', 'updateUserPhoto', 'updateContactRegistered', 'updateContactLink'], true)
+            \in_array($update['_'], ['updateChannel', 'updateUser', 'updateUserName', 'updateUserPhone', 'updateUserBlocked', 'updateUserPhoto', 'updateContactRegistered', 'updateContactLink', 'updatePeerBlocked'], true)
             || (
                 $update['_'] === 'updateNewChannelMessage'
                 && isset($update['message']['action']['_'])
@@ -1109,12 +1184,7 @@ trait UpdateHandler
                     if ($this->getSettings()->getDb()->getEnableFullPeerDb()) {
                         $this->peerDatabase->expireFull($id);
                     }
-                } catch (PeerNotInDbException) {
-                } catch (FloodWaitError) {
-                } catch (RPCErrorException $e) {
-                    if ($e->rpc !== 'CHANNEL_PRIVATE' && $e->rpc !== 'MSG_ID_INVALID') {
-                        throw $e;
-                    }
+                } catch (ChannelPrivateError|MsgIdInvalidError|PeerNotInDbException|FloodWaitError) {
                 }
             });
         }

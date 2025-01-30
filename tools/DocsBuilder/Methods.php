@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -87,7 +87,10 @@ trait Methods
             }
             $params = '';
             foreach ($data['params'] as $param) {
-                if (\in_array($param['name'], ['flags', 'flags2', 'random_id', 'random_bytes'], true)) {
+                if (\in_array($param['name'], ['flags', 'flags2', 'random_bytes'], true)) {
+                    continue;
+                }
+                if ($param['name'] === 'random_id' && stripos($method, 'sponsored') === false) {
                     continue;
                 }
                 if ($param['name'] === 'data' && $type === 'messages_SentEncryptedMessage' && !isset($this->settings['td'])) {
@@ -141,7 +144,10 @@ trait Methods
             $hasreplymarkup = false;
             $hasmessage = false;
             foreach ($data['params'] as $param) {
-                if (\in_array($param['name'], ['flags', 'flags2', 'random_id', 'random_bytes'], true)) {
+                if (\in_array($param['name'], ['flags', 'flags2', 'random_bytes'], true)) {
+                    continue;
+                }
+                if ($param['name'] === 'random_id' && stripos($method, 'sponsored') === false) {
                     continue;
                 }
                 if ($param['name'] === 'data' && $type === 'messages_SentEncryptedMessage' && !isset($this->settings['td'])) {
@@ -159,7 +165,7 @@ trait Methods
                 if ($param['name'] === 'hash' && ($param['type'] === 'long' || $param['type'] === 'int')) {
                     $param['pow'] = 'hi';
                     $param['type'] = 'Vector t';
-                    $param['subtype'] = 'long';
+                    $param['subtype'] = 'long|string';
                 }
                 $ptype = $param[$type_or_subtype = isset($param['subtype']) ? 'subtype' : 'type'];
                 switch ($ptype) {
@@ -186,7 +192,7 @@ trait Methods
                 if (\in_array($ptype, ['InputEncryptedFile'], true) && !isset($this->settings['td'])) {
                     $human_ptype = 'File path or '.$ptype;
                 }
-                $type_or_bare_type = ctype_upper(Tools::end(explode('.', $param[$type_or_subtype]))[0]) || \in_array($param[$type_or_subtype], ['!X', 'X', 'bytes', 'true', 'false', 'double', 'string', 'Bool', 'int', 'long', 'int128', 'int256', 'int512', 'int53'], true) ? 'types' : 'constructors';
+                $type_or_bare_type = ctype_upper(Tools::end(explode('.', $param[$type_or_subtype]))[0]) || \in_array($param[$type_or_subtype], ['!X', 'X', 'bytes', 'true', 'false', 'double', 'string', 'Bool', 'int', 'long', 'int128', 'int256', 'int512', 'int53', 'long|string'], true) ? 'types' : 'constructors';
                 if (isset($this->tdDescriptions['methods'][$method])) {
                     $table .= '|'.self::markdownEscape($param['name']).'|'.(isset($param['subtype']) ? 'Array of ' : '').'['.self::markdownEscape($human_ptype).'](/API_docs/'.$type_or_bare_type.'/'.$ptype.'.md) | '.$this->tdDescriptions['methods'][$method]['params'][$param['name']].' | '.(isset($param['pow']) || $param['type'] === 'int' || $param['type'] === 'string' || $param['type'] === 'double' || ($id = $this->TL->getConstructors()->findByPredicate(lcfirst($param['type']).'Empty')) && $id['type'] === $param['type'] || ($id = $this->TL->getConstructors()->findByPredicate('input'.$param['type'].'Empty')) && $id['type'] === $param['type'] ? 'Optional' : 'Yes').'|';
                 } else {
@@ -244,6 +250,7 @@ trait Methods
             $bot = !\in_array($method, $bots, true);
             $example = '';
             if (!isset($this->settings['td'])) {
+                $example .= "### Can userbots use this method: **YES**\n\n";
                 $example .= '### Can bots use this method: **'.($bot ? 'YES' : 'NO')."**\n\n\n";
                 $example .= str_replace('[]', '', $this->template('method-example', str_replace('.', '_', $type), $phpMethod, $params, $method, $lua_params));
                 if ($hasreplymarkup) {

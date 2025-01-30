@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -50,12 +50,27 @@ trait Broadcast
      * MadelineProto will also periodically emit updateBroadcastProgress updates,
      * containing a Progress object for all broadcasts currently in-progress.
      *
-     * @param array      $messages The messages to send: an array of arrays, containing parameters to pass to messages.sendMessage.
-     * @param bool       $pin      Whether to also pin the last sent message.
-     * @param float|null $delay    Number of seconds to wait between each peer.
+     * @param array         $messages The messages to send: an array of arrays, containing parameters to pass to messages.sendMessage.
+     * @param bool          $pin      Whether to also pin the last sent message.
+     * @param float|null    $delay    Number of seconds to wait between each peer.
      */
     public function broadcastMessages(array $messages, ?Filter $filter = null, bool $pin = false, ?float $delay = null): int
     {
+        foreach ($messages as &$message) {
+            if (isset($message['media']['_']) &&
+                (
+                    $message['media']['_'] === 'inputMediaUploadedPhoto'
+                    || $message['media']['_'] === 'inputMediaUploadedDocument'
+                    || $message['media']['_'] === 'inputMediaPhotoExternal'
+                    || $message['media']['_'] === 'inputMediaDocumentExternal'
+                )
+            ) {
+                $message['media'] = $this->methodCallAsyncRead(
+                    'messages.uploadMedia',
+                    ['peer' => 'me', 'media' => $message['media']]
+                );
+            }
+        } unset($message);
         return $this->broadcastCustom(new ActionSend($this, $messages, $pin), $filter, $delay);
     }
     /**

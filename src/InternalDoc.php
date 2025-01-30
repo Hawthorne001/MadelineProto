@@ -178,9 +178,9 @@ abstract class InternalDoc
     /**
      * Accept call.
      */
-    final public function acceptCall(int $id): void
+    final public function acceptCall(int $id, ?\Amp\Cancellation $cancellation = null): void
     {
-        $this->wrapper->getAPI()->acceptCall($id);
+        $this->wrapper->getAPI()->acceptCall($id, $cancellation);
     }
     /**
      * Accept secret chat.
@@ -291,9 +291,9 @@ abstract class InternalDoc
      * MadelineProto will also periodically emit updateBroadcastProgress updates,
      * containing a Progress object for all broadcasts currently in-progress.
      *
-     * @param array      $messages The messages to send: an array of arrays, containing parameters to pass to messages.sendMessage.
-     * @param bool       $pin      Whether to also pin the last sent message.
-     * @param float|null $delay    Number of seconds to wait between each peer.
+     * @param array         $messages The messages to send: an array of arrays, containing parameters to pass to messages.sendMessage.
+     * @param bool          $pin      Whether to also pin the last sent message.
+     * @param float|null    $delay    Number of seconds to wait between each peer.
      */
     final public function broadcastMessages(array $messages, ?\danog\MadelineProto\Broadcast\Filter $filter = null, bool $pin = false, ?float $delay = null): int
     {
@@ -422,10 +422,11 @@ abstract class InternalDoc
      * Discard secret chat.
      *
      * @param int $chat Secret chat ID
+     * @param bool $deleteHistory If true, deletes the entire chat history for the other user as well.
      */
-    final public function discardSecretChat(int $chat): void
+    final public function discardSecretChat(int $chat, bool $deleteHistory = false): void
     {
-        $this->wrapper->getAPI()->discardSecretChat($chat);
+        $this->wrapper->getAPI()->discardSecretChat($chat, $deleteHistory);
     }
     /**
      * Downloads a file to the browser using the specified session file.
@@ -616,9 +617,9 @@ abstract class InternalDoc
      *
      * @param string $url URL
      */
-    final public function fileGetContents(string $url): string
+    final public function fileGetContents(string $url, ?\Amp\Cancellation $cancellation = null): string
     {
-        return $this->wrapper->getAPI()->fileGetContents($url);
+        return $this->wrapper->getAPI()->fileGetContents($url, $cancellation);
     }
     /**
      * Asynchronously lock a file
@@ -656,7 +657,7 @@ abstract class InternalDoc
      *
      * Returns a vector hash.
      *
-     * @param array $longs IDs
+     * @param array<string|int> $longs IDs
      */
     final public static function genVectorHash(array $longs): string
     {
@@ -762,9 +763,9 @@ abstract class InternalDoc
     /**
      * Get diffie-hellman configuration.
      */
-    final public function getDhConfig(): array
+    final public function getDhConfig(?\Amp\Cancellation $cancellation = null): array
     {
-        return $this->wrapper->getAPI()->getDhConfig();
+        return $this->wrapper->getAPI()->getDhConfig($cancellation);
     }
     /**
      * Get dialog IDs.

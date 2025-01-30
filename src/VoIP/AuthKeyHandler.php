@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -22,6 +22,7 @@ namespace danog\MadelineProto\VoIP;
 
 use Amp\ByteStream\ReadableStream;
 use Amp\ByteStream\WritableStream;
+use Amp\Cancellation;
 use Amp\DeferredFuture;
 use AssertionError;
 use danog\MadelineProto\LocalFile;
@@ -121,9 +122,9 @@ trait AuthKeyHandler
     /**
      * Accept call.
      */
-    public function acceptCall(int $id): void
+    public function acceptCall(int $id, ?Cancellation $cancellation = null): void
     {
-        ($this->calls[$id] ?? null)?->accept();
+        ($this->calls[$id] ?? null)?->accept($cancellation);
     }
 
     /**

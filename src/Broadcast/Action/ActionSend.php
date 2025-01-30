@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -24,6 +24,12 @@ use Amp\Cancellation;
 use danog\MadelineProto\Broadcast\Action;
 use danog\MadelineProto\MTProto;
 use danog\MadelineProto\PeerNotInDbException;
+use danog\MadelineProto\RPCError\ChannelPrivateError;
+use danog\MadelineProto\RPCError\ChatWriteForbiddenError;
+use danog\MadelineProto\RPCError\InputUserDeactivatedError;
+use danog\MadelineProto\RPCError\PeerIdInvalidError;
+use danog\MadelineProto\RPCError\UserIsBlockedError;
+use danog\MadelineProto\RPCError\UserIsBotError;
 use danog\MadelineProto\RPCErrorException;
 
 /** @internal */
@@ -61,27 +67,7 @@ final class ActionSend implements Action
                 } catch (RPCErrorException) {
                 }
             }
-        } catch (RPCErrorException $e) {
-            if ($e->rpc === 'INPUT_USER_DEACTIVATED') {
-                return;
-            }
-            if ($e->rpc === 'USER_IS_BOT') {
-                return;
-            }
-            if ($e->rpc === 'CHAT_WRITE_FORBIDDEN') {
-                return;
-            }
-            if ($e->rpc === 'CHANNEL_PRIVATE') {
-                return;
-            }
-            if ($e->rpc === 'USER_IS_BLOCKED') {
-                return;
-            }
-            if ($e->rpc === 'PEER_ID_INVALID') {
-                return;
-            }
-            throw $e;
-        } catch (PeerNotInDbException) {
+        } catch (PeerNotInDbException|InputUserDeactivatedError|UserIsBotError|ChatWriteForbiddenError|ChannelPrivateError|UserIsBlockedError|PeerIdInvalidError) {
             return;
         }
     }

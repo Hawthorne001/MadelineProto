@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -47,8 +47,10 @@ use danog\MadelineProto\FileCallbackInterface;
 use danog\MadelineProto\FileRedirect;
 use danog\MadelineProto\Logger;
 use danog\MadelineProto\MTProtoTools\Crypt\IGE;
+use danog\MadelineProto\RPCError\FileTokenInvalidError;
+use danog\MadelineProto\RPCError\FloodPremiumWaitError;
 use danog\MadelineProto\RPCError\FloodWaitError;
-use danog\MadelineProto\RPCErrorException;
+use danog\MadelineProto\RPCError\RequestTokenInvalidError;
 use danog\MadelineProto\SecurityException;
 use danog\MadelineProto\Settings;
 use danog\MadelineProto\StreamEof;
@@ -206,6 +208,7 @@ trait Files
         }
         $request = new Request($url);
         $request->setTransferTimeout(INF);
+        $request->setInactivityTimeout(INF);
         $request->setBodySizeLimit(512 * 1024 * 8000);
         $response = $this->datacenter->getHTTPClient()->request($request, $cancellation);
         if (($status = $response->getStatus()) !== 200) {
@@ -317,22 +320,26 @@ trait Files
         };
         $resPromises = [];
         $start = microtime(true);
+        /** @var ?FloodPremiumWaitError */
+        $floodWaitError = null;
         while ($part_num < $part_total_num || !$size) {
             if ($seekable) {
-                $writeCb = function () use ($method, $callable, $part_num, $cancellation, &$datacenter): WrappedFuture {
+                $writeCb = function () use ($method, $callable, $part_num, $cancellation, &$datacenter, &$floodWaitError): WrappedFuture {
+                    $floodWaitError?->wait($cancellation);
                     return $this->methodCallAsyncWrite(
                         $method,
-                        $callable($part_num) + ['cancellation' => $cancellation],
+                        $callable($part_num) + ['cancellation' => $cancellation, 'floodWaitLimit' => 0],
                         $datacenter
                     );
                 };
             } else {
                 try {
-                    $part = $callable($part_num) + ['cancellation' => $cancellation];
+                    $part = $callable($part_num) + ['cancellation' => $cancellation, 'floodWaitLimit' => 0];
                 } catch (StreamEof) {
                     break;
                 }
-                $writeCb = function () use ($method, $part, &$datacenter): WrappedFuture {
+                $writeCb = function () use ($method, $part, &$datacenter, &$floodWaitError, $cancellation): WrappedFuture {
+                    $floodWaitError?->wait($cancellation);
                     return $this->methodCallAsyncWrite(
                         $method,
                         $part,
@@ -341,11 +348,11 @@ trait Files
                 };
             }
             $writePromise = async($writeCb);
-            EventLoop::queue(function () use ($writePromise, $cb, $part_num, $size, &$resPromises, $cancellation, $writeCb, &$datacenter): void {
+            EventLoop::queue(function () use ($writePromise, $cb, $part_num, $size, &$resPromises, $cancellation, $writeCb, &$datacenter, &$floodWaitError): void {
+                $d = new DeferredFuture;
+                $resPromises[] = $d->getFuture();
                 do {
                     $readFuture = $writePromise->await($cancellation);
-                    $d = new DeferredFuture;
-                    $resPromises[] = $d->getFuture();
                     try {
                         // Wrote chunk!
                         if (!$readFuture->await($cancellation)) {
@@ -357,14 +364,17 @@ trait Files
                         }
                         $d->complete();
                         return;
+                    } catch (FloodPremiumWaitError $e) {
+                        $this->logger("Got {$e->rpc} while uploading part $part_num: {$datacenter}, waiting and retrying...");
+                        $floodWaitError = $e;
+                        $writePromise = async($writeCb);
                     } catch (FileRedirect $e) {
                         $datacenter = $e->dc;
-                        $this->logger("Got redirect while uploading $part_num: {$datacenter}");
+                        $this->logger("Got redirect while uploading part $part_num: {$datacenter}");
                         $writePromise = async($writeCb);
                     } catch (Throwable $e) {
                         $cancellation?->throwIfRequested();
-                        $this->logger("Got exception while uploading $part_num: {$e}");
-                        $d->error($e);
+                        $this->logger("Got exception while uploading part $part_num: {$e}");
                         $writePromise = async($writeCb);
                     }
                 } while (true);
@@ -384,6 +394,9 @@ trait Files
         }
         await($promises, $cancellation);
         await($resPromises, $cancellation);
+        if ($totalSize === 0) {
+            throw new AssertionError('You uploaded an empty file!');
+        }
         $time = microtime(true) - $start;
         $speed = (int) ($totalSize * 8 / $time) / 1000000;
         if (!$size) {
@@ -1209,17 +1222,14 @@ trait Files
                     break;
                 } catch (FileRedirect $e) {
                     $datacenter = $e->dc;
-                } catch (FloodWaitError $e) {
+                } catch (FloodWaitError) {
                     delay(1, cancellation: $cancellation);
-                } catch (RPCErrorException $e) {
-                    switch ($e->rpc) {
-                        case 'FILE_TOKEN_INVALID':
-                            $cdn = false;
-                            $datacenter = $this->authorized_dc;
-                            continue 3;
-                        default:
-                            throw $e;
-                    }
+                } catch (FloodPremiumWaitError $e) {
+                    $e->wait($cancellation);
+                } catch (FileTokenInvalidError) {
+                    $cdn = false;
+                    $datacenter = $this->authorized_dc;
+                    continue 2;
                 }
             } while (true);
             $cancellation?->throwIfRequested();
@@ -1242,16 +1252,10 @@ trait Files
                 $this->getConfig();
                 try {
                     $this->addCdnHashes($messageMedia['file_token'], $this->methodCallAsyncRead('upload.reuploadCdnFile', ['file_token' => $messageMedia['file_token'], 'request_token' => $res['request_token'], 'cancellation' => $cancellation], $this->authorized_dc));
-                } catch (RPCErrorException $e) {
-                    switch ($e->rpc) {
-                        case 'FILE_TOKEN_INVALID':
-                        case 'REQUEST_TOKEN_INVALID':
-                            $cdn = false;
-                            $datacenter = $this->authorized_dc;
-                            continue 2;
-                        default:
-                            throw $e;
-                    }
+                } catch (FileTokenInvalidError|RequestTokenInvalidError) {
+                    $cdn = false;
+                    $datacenter = $this->authorized_dc;
+                    continue;
                 }
                 continue;
             }

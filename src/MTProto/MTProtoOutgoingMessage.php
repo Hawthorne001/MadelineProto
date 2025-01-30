@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -124,13 +124,38 @@ class MTProtoOutgoingMessage extends MTProtoMessage
          */
         public readonly ?int $floodWaitLimit = null,
         public readonly ?int $takeoutId = null,
+        public readonly ?string $businessConnectionId = null,
         private ?DeferredFuture $resultDeferred = null,
         public readonly ?Cancellation $cancellation = null
     ) {
         $this->userRelated = $constructor === 'users.getUsers' && $body === ['id' => [['_' => 'inputUserSelf']]] || $constructor === 'auth.exportAuthorization' || $constructor === 'updates.getDifference';
 
         parent::__construct(!isset(MTProtoMessage::NOT_CONTENT_RELATED[$constructor]));
-        $cancellation?->subscribe(fn (CancelledException $e) => $this->reply(static fn () => throw $e));
+
+        $cancellation?->subscribe(function (CancelledException $e): void {
+            if ($this->hasReply()) {
+                return;
+            }
+            if (!$this->wasSent()) {
+                $this->reply(static fn () => throw $e);
+                return;
+            }
+            $this->reply(static fn () => throw $e);
+
+            $this->connection->requestResponse?->inc([
+                'method' => $this->constructor,
+                'error_message' => 'Request Timeout',
+                'error_code' => '408',
+            ]);
+
+            if ($this->hasMsgId()) {
+                $this->connection->API->logger("Cancelling $this...");
+                $this->connection->API->logger($this->connection->methodCallAsyncRead(
+                    'rpc_drop_answer',
+                    ['req_msg_id' => $this->getMsgId()]
+                ));
+            }
+        });
     }
 
     /**
@@ -189,10 +214,12 @@ class MTProtoOutgoingMessage extends MTProtoMessage
             $this->connection->inFlightGauge?->dec([
                 'method' => $this->constructor,
             ]);
-            $this->connection->requestLatencies?->observe(
-                hrtime(true) - $this->sent,
-                ['method' => $this->constructor]
-            );
+            if (!\is_callable($result)) {
+                $this->connection->requestLatencies?->observe(
+                    hrtime(true) - $this->sent,
+                    ['method' => $this->constructor]
+                );
+            }
         }
 
         $this->serializedBody = null;

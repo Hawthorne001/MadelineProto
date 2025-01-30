@@ -13,7 +13,7 @@ declare(strict_types=1);
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -162,6 +162,13 @@ trait Events
             return $this->getPlugin($class);
         }
         return $this->event_handler_instance;
+    }
+    /** @internal */
+    public function getEventHandlerClass(): ?string
+    {
+        return $this->event_handler_instance !== null
+            ? $this->event_handler_instance::class
+            : null;
     }
     /**
      * Check if an event handler instance is present.

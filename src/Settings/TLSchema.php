@@ -9,7 +9,7 @@
  * If not, see <http://www.gnu.org/licenses/>.
  *
  * @author    Daniil Gentili <daniil@daniil.it>
- * @copyright 2016-2023 Daniil Gentili <daniil@daniil.it>
+ * @copyright 2016-2025 Daniil Gentili <daniil@daniil.it>
  * @license   https://opensource.org/licenses/AGPL-3.0 AGPLv3
  * @link https://docs.madelineproto.xyz MadelineProto documentation
  */
@@ -27,11 +27,11 @@ final class TLSchema extends SettingsAbstract
     /**
      * TL layer version.
      */
-    protected int $layer = 179;
+    protected int $layer = 198;
     /**
      * API schema path.
      */
-    protected string $APISchema = __DIR__ . '/../TL_telegram_v179.tl';
+    protected string $APISchema = __DIR__ . '/../TL_telegram_v198.tl';
     /**
      * MTProto schema path.
      */
@@ -42,6 +42,8 @@ final class TLSchema extends SettingsAbstract
     protected string $secretSchema = __DIR__.'/../TL_secret.tl';
     /**
      * @internal Other schemas
+     *
+     * @var array<string, string>
      */
     protected array $other = [];
     /**
@@ -51,7 +53,7 @@ final class TLSchema extends SettingsAbstract
     /**
      * Whether to enable fuzzing mode (all parameters will be populated with default values).
      */
-    protected bool $fuzz = false;
+    protected bool $fuzzMode = false;
     public function __sleep()
     {
         return array_merge(['wasUpgraded'], parent::__sleep());
@@ -173,6 +175,8 @@ final class TLSchema extends SettingsAbstract
 
     /**
      * Get the value of other.
+     *
+     * @return array<string, string>
      */
     public function getOther(): array
     {
@@ -181,6 +185,8 @@ final class TLSchema extends SettingsAbstract
 
     /**
      * Set the value of other.
+     *
+     * @param array<string, string> $other
      */
     public function setOther(array $other): self
     {
@@ -194,7 +200,7 @@ final class TLSchema extends SettingsAbstract
      */
     public function getFuzzMode(): bool
     {
-        return $this->fuzz;
+        return $this->fuzzMode;
     }
 
     /**
@@ -202,7 +208,7 @@ final class TLSchema extends SettingsAbstract
      */
     public function setFuzzMode(bool $fuzz): self
     {
-        $this->fuzz = $fuzz;
+        $this->fuzzMode = $fuzz;
 
         return $this;
     }
